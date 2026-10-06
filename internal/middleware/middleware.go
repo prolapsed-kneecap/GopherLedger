@@ -4,11 +4,15 @@ package middleware
 
 import (
 	"context"
-	"gopherledger/internal/auth"
+	"encoding/json"
 	"log"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"time"
+
+	"gopherledger/internal/auth"
+	"gopherledger/internal/handler"
 )
 
 var LogLevel = "info"
@@ -24,17 +28,24 @@ var LogLevel = "info"
 func Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("Authorization")
+		token = strings.TrimPrefix(token, "Bearer ")
+		token = strings.TrimSpace(token)
+		
 		if token == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"code": "UNAUTHORIZED", "message": "не авторизован"})
 			return
 		}
 		userID, err := auth.ValidateToken(token)
 		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"code": "UNAUTHORIZED", "message": "не авторизован"})
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), "userID", userID)
+		ctx := context.WithValue(r.Context(), handler.CtxKeyUserID, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -43,12 +54,16 @@ func Auth(next http.Handler) http.Handler {
 // Используйте эту структуру в Logging.
 type statusRecorder struct {
 	http.ResponseWriter
-	status int
+	status      int
+	wroteHeader bool
 }
 
 func (r *statusRecorder) WriteHeader(code int) {
-	r.status = code
-	r.ResponseWriter.WriteHeader(code)
+	if !r.wroteHeader {
+		r.status = code
+		r.wroteHeader = true
+		r.ResponseWriter.WriteHeader(code)
+	}
 }
 
 // Logging логирует метод, путь, статус ответа и время выполнения каждого запроса.
@@ -64,7 +79,13 @@ func Logging(next http.Handler) http.Handler {
 
 		next.ServeHTTP(recorder, r)
 		dur := time.Since(start)
-		log.Printf("method=%s path=%s status=%d time=%v", r.Method, r.URL.Path, recorder.status, dur)
+		
+		if LogLevel == "debug" {
+			log.Printf("method=%s path=%s status=%d duration=%v remote=%s user_agent=%q",
+				r.Method, r.URL.Path, recorder.status, dur, r.RemoteAddr, r.UserAgent())
+		} else {
+			log.Printf("method=%s path=%s status=%d time=%v", r.Method, r.URL.Path, recorder.status, dur)
+		}
 	})
 }
 

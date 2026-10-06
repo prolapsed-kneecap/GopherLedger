@@ -34,6 +34,7 @@ type Store interface {
 	GetBalance(userID int64) (domain.Balance, error)
 	Withdraw(userID int64, orderNumber string, sum float64) error
 	GetWithdrawals(userID int64) ([]domain.Withdrawal, error)
+	GetStats() (domain.Stats, error)
 }
 
 type Service struct {
@@ -115,9 +116,16 @@ func (s *Service) GetWithdrawals(userID int64) ([]domain.Withdrawal, error) {
 	return s.repo.GetWithdrawals(userID)
 }
 
+func (s *Service) GetStats() (domain.Stats, error) {
+	return s.repo.GetStats()
+}
+
 // validateLuhn проверяет контрольную сумму номера заказа по алгоритму Луна.
 // Вызывается при загрузке заказа и при списании баллов.
 func validateLuhn(number string) bool {
+	if len(number) == 0 {
+		return false
+	}
 	for _, r := range number {
 		if (r < '0') || (r > '9') {
 			return false

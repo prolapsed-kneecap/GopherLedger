@@ -8,22 +8,36 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"gopherledger/internal/domain"
-	"gopherledger/internal/service"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
+
+	"gopherledger/internal/domain"
 )
+
+type Service interface {
+	RegisterUser(login, password string) (string, error)
+	LoginUser(login, password string) (string, error)
+	CreateOrder(userID int64, number string) (*domain.Order, error)
+	GetUserOrders(userID int64) ([]domain.Order, error)
+	GetBalance(userID int64) (domain.Balance, error)
+	Withdraw(userID int64, orderNumber string, sum float64) error
+	GetWithdrawals(userID int64) ([]domain.Withdrawal, error)
+	GetStats() (domain.Stats, error)
+}
 
 // Handler хранит зависимость от бизнес-логики.
 // Замените interface{} на свой интерфейс.
 type Handler struct {
-	svc *service.Service
+	svc Service
 }
 
 // New создаёт Handler.
-func New(svc *service.Service) *Handler {
+func New(svc Service) *Handler {
 	return &Handler{svc: svc}
 }
 
@@ -40,7 +54,7 @@ type withdrawRequest struct {
 type orderResponse struct {
 	Number     string    `json:"number"`
 	Status     string    `json:"status"`
-	Accrual    float64   `json:"accrual,omitempty"`
+	Accrual    *float64  `json:"accrual,omitempty"`
 	UploadedAt time.Time `json:"uploaded_at"`
 }
 
@@ -108,6 +122,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "неверный формат запроса", err)
 		return
 	}
+	if req.Login == "" || req.Password == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "логин и пароль обязательны", nil)
+		return
+	}
 	token, err := h.svc.RegisterUser(req.Login, req.Password)
 	if err != nil {
 		if err == domain.ErrUserExists {
@@ -136,6 +154,10 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(body, &req)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "неверный формат запроса", err)
+		return
+	}
+	if req.Login == "" || req.Password == "" {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "логин и пароль обязательны", nil)
 		return
 	}
 	token, err := h.svc.LoginUser(req.Login, req.Password)
@@ -169,7 +191,7 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
-	number := string(body)
+	number := strings.TrimSpace(string(body))
 
 	order, err := h.svc.CreateOrder(userID, number)
 	if err != nil {
@@ -207,10 +229,15 @@ func (h *Handler) GetOrders(w http.ResponseWriter, r *http.Request) {
 
 	response := make([]orderResponse, len(orders))
 	for i, order := range orders {
+		var accrual *float64
+		if order.Status == domain.OrderStatusProcessed {
+			a := order.Accrual
+			accrual = &a
+		}
 		response[i] = orderResponse{
 			Number:     order.Number,
 			Status:     order.Status,
-			Accrual:    order.Accrual,
+			Accrual:    accrual,
 			UploadedAt: order.UploadedAt,
 		}
 	}
@@ -318,7 +345,28 @@ func (h *Handler) GetWithdrawals(w http.ResponseWriter, r *http.Request) {
 //
 // Для работы с файлами используйте пакет os (неделя 8).
 func (h *Handler) ExportStats(w http.ResponseWriter, r *http.Request) {
-	//TODO
+	stats, err := h.svc.GetStats()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "внутренняя ошибка", err)
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Report generated at: %s\n", stats.GeneratedAt.Format(time.RFC3339)))
+	sb.WriteString(fmt.Sprintf("Total registered users: %d\n", stats.TotalUsers))
+	sb.WriteString(fmt.Sprintf("Total orders: %d\n", stats.TotalOrders))
+	sb.WriteString("Orders by status:\n")
+	sb.WriteString(fmt.Sprintf("  - NEW: %d\n", stats.OrdersByStatus[domain.OrderStatusNew]))
+	sb.WriteString(fmt.Sprintf("  - PROCESSING: %d\n", stats.OrdersByStatus[domain.OrderStatusProcessing]))
+	sb.WriteString(fmt.Sprintf("  - PROCESSED: %d\n", stats.OrdersByStatus[domain.OrderStatusProcessed]))
+	sb.WriteString(fmt.Sprintf("  - INVALID: %d\n", stats.OrdersByStatus[domain.OrderStatusInvalid]))
+	sb.WriteString(fmt.Sprintf("Total accrued points: %.2f\n", stats.TotalAccrued))
+	sb.WriteString(fmt.Sprintf("Total withdrawn points: %.2f\n", stats.TotalWithdrawn))
+
+	if err := os.WriteFile("stats.txt", []byte(sb.String()), 0644); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "ошибка записи файла", err)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -333,7 +381,6 @@ const CtxKeyUserID contextKey = "userID"
 // UserIDFromContext извлекает ID аутентифицированного пользователя из контекста.
 // Возвращает 0, false если значение отсутствует.
 func UserIDFromContext(ctx context.Context) (int64, bool) {
-	// реализуйте самостоятельно
-	userID, ok := ctx.Value("userID").(int64)
+	userID, ok := ctx.Value(CtxKeyUserID).(int64)
 	return userID, ok
 }

@@ -244,3 +244,31 @@ func (s *Store) GetWithdrawals(userID int64) ([]domain.Withdrawal, error) {
 	return ans, nil
 
 }
+
+func (s *Store) GetStats() (domain.Stats, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ordersByStatus := make(map[string]int)
+	var totalAccrued float64
+	for _, order := range s.orders {
+		ordersByStatus[order.Status]++
+		if order.Status == domain.OrderStatusProcessed {
+			totalAccrued += order.Accrual
+		}
+	}
+
+	var totalWithdrawn float64
+	for _, balance := range s.balances {
+		totalWithdrawn += balance.Withdrawn
+	}
+
+	return domain.Stats{
+		TotalUsers:     len(s.users),
+		TotalOrders:    len(s.orders),
+		OrdersByStatus: ordersByStatus,
+		TotalAccrued:   totalAccrued,
+		TotalWithdrawn: totalWithdrawn,
+		GeneratedAt:    time.Now().UTC(),
+	}, nil
+}
