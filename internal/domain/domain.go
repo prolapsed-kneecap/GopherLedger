@@ -1,5 +1,4 @@
-// Пакет domain содержит все бизнес-типы и сентинел-ошибки приложения.
-// Этот пакет предоставлен и изменять его не нужно.
+// Package domain has the main types and errors.
 package domain
 
 import (
@@ -8,7 +7,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Сентинел-ошибки
+// Errors
 // ---------------------------------------------------------------------------
 
 var (
@@ -22,17 +21,17 @@ var (
 )
 
 // ---------------------------------------------------------------------------
-// Модели
+// Data types
 // ---------------------------------------------------------------------------
 
-// User представляет зарегистрированного пользователя.
+// User is someone using the app.
 type User struct {
 	ID           int64
 	Login        string
 	PasswordHash string
 }
 
-// Order представляет заказ, загруженный пользователем.
+// Order is a user's purchase.
 type Order struct {
 	ID         int64
 	UserID     int64
@@ -42,13 +41,13 @@ type Order struct {
 	UploadedAt time.Time
 }
 
-// Balance представляет текущий баланс пользователя.
+// Balance is the user's points.
 type Balance struct {
 	Current   float64
 	Withdrawn float64
 }
 
-// Withdrawal представляет операцию списания баллов.
+// Withdrawal is a record of spent points.
 type Withdrawal struct {
 	ID          int64
 	UserID      int64
@@ -58,7 +57,7 @@ type Withdrawal struct {
 }
 
 // ---------------------------------------------------------------------------
-// Константы статусов заказа
+// Order statuses
 // ---------------------------------------------------------------------------
 
 const (

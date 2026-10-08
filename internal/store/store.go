@@ -1,6 +1,4 @@
-// Пакет store реализует хранилище данных в памяти.
-// Используйте отдельные мьютексы для независимых групп данных.
-// Реализуйте этот пакет самостоятельно.
+// Package store saves data in memory.
 package store
 
 import (
@@ -10,30 +8,30 @@ import (
 	"time"
 )
 
-// Store хранит все данные приложения в памяти.
-// Добавьте средства защиты конкурентного доступа самостоятельно.
+// Store keeps all app data in memory.
+// It uses a mutex to be safe with goroutines.
 type Store struct {
 	mu sync.Mutex
-	// users хранит пользователей по их ID
+	// users maps user ID to User
 	users map[int64]*domain.User
 
-	// usersByLogin хранит пользователей по логину - для быстрого поиска при авторизации
+	// usersByLogin helps find users quickly by login
 	usersByLogin map[string]*domain.User
 
-	// orders хранит заказы по номеру заказа
+	// orders maps order number to Order
 	orders map[string]*domain.Order
 
-	// balances хранит текущий баланс каждого пользователя по его ID
+	// balances keeps track of user points
 	balances map[int64]*domain.Balance
 
-	// withdrawals хранит историю списаний для каждого пользователя по его ID
+	// withdrawals keeps the history of spent points
 	withdrawals map[int64][]*domain.Withdrawal
 
-	// nextID используется для генерации уникальных числовых ID
+	// nextID makes new IDs
 	nextID int64
 }
 
-// New создаёт и возвращает новое пустое хранилище.
+// New makes a fresh store.
 func New() *Store {
 	return &Store{
 		users:        make(map[int64]*domain.User),
@@ -45,8 +43,8 @@ func New() *Store {
 	}
 }
 
-// CreateUser добавляет нового пользователя.
-// Возвращает domain.ErrUserExists если логин уже занят.
+// CreateUser saves a new user.
+// Returns an error if the login is taken.
 func (s *Store) CreateUser(login, passwordHash string) (*domain.User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -67,8 +65,8 @@ func (s *Store) CreateUser(login, passwordHash string) (*domain.User, error) {
 	return user, nil
 }
 
-// GetUserByLogin возвращает пользователя по логину.
-// Возвращает domain.ErrUserNotFound если пользователь не найден.
+// GetUserByLogin finds a user by login.
+// Returns an error if they don't exist.
 func (s *Store) GetUserByLogin(login string) (*domain.User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -80,9 +78,9 @@ func (s *Store) GetUserByLogin(login string) (*domain.User, error) {
 	return user, nil
 }
 
-// CreateOrder добавляет новый заказ для пользователя.
-// Возвращает domain.ErrOrderOwnedByUser если этот пользователь уже загружал этот номер.
-// Возвращает domain.ErrOrderExists если номер принадлежит другому пользователю.
+// CreateOrder saves a new order.
+// Returns an error if the user already added it.
+// Returns an error if someone else added it.
 func (s *Store) CreateOrder(userID int64, number string) (*domain.Order, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -111,7 +109,7 @@ func (s *Store) CreateOrder(userID int64, number string) (*domain.Order, error) 
 	return order, nil
 }
 
-// GetUserOrders возвращает все заказы пользователя, сначала новые.
+// GetUserOrders gets all user orders, newest first.
 func (s *Store) GetUserOrders(userID int64) ([]domain.Order, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -135,7 +133,7 @@ func (s *Store) GetUserOrders(userID int64) ([]domain.Order, error) {
 	return orders, nil
 }
 
-// GetOrdersForProcessing возвращает все заказы в статусе NEW или PROCESSING.
+// GetOrdersForProcessing gets orders that need work.
 func (s *Store) GetOrdersForProcessing() ([]domain.Order, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -148,8 +146,8 @@ func (s *Store) GetOrdersForProcessing() ([]domain.Order, error) {
 	return orders, nil
 }
 
-// UpdateOrderStatus обновляет статус и начисление заказа.
-// Если статус PROCESSED и accrual > 0, баланс пользователя пополняется.
+// UpdateOrderStatus changes the order status and points.
+// If done, it adds points to the user.
 func (s *Store) UpdateOrderStatus(number, status string, accrual float64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -173,7 +171,7 @@ func (s *Store) UpdateOrderStatus(number, status string, accrual float64) error 
 	return nil
 }
 
-// GetBalance возвращает баланс пользователя.
+// GetBalance gets the user points.
 func (s *Store) GetBalance(userID int64) (domain.Balance, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -185,9 +183,9 @@ func (s *Store) GetBalance(userID int64) (domain.Balance, error) {
 	return *balance, nil
 }
 
-// Withdraw списывает сумму с баланса и записывает операцию.
-// Возвращает domain.ErrInsufficientFunds если баланса не хватает.
-// Обе операции должны быть атомарны: либо обе успешны, либо ни одна.
+// Withdraw spends points and saves the record.
+// Returns an error if not enough points.
+// It does both steps safely together.
 func (s *Store) Withdraw(userID int64, orderNumber string, sum float64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -218,7 +216,7 @@ func (s *Store) Withdraw(userID int64, orderNumber string, sum float64) error {
 	return nil
 }
 
-// GetWithdrawals возвращает историю списаний пользователя, сначала новые.
+// GetWithdrawals gets the spent points history, newest first.
 func (s *Store) GetWithdrawals(userID int64) ([]domain.Withdrawal, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -1,5 +1,4 @@
-// Пакет middleware содержит HTTP-middleware.
-// Реализуйте Auth, Logging и Recover самостоятельно.
+// Package middleware has HTTP helpers for auth, logs, and panics.
 package middleware
 
 import (
@@ -17,14 +16,8 @@ import (
 
 var LogLevel = "info"
 
-// Auth проверяет токен из заголовка Authorization и помещает ID пользователя в контекст.
-// Запросы без валидного токена получают ответ 401 Unauthorized.
-//
-// Что нужно сделать:
-//   - прочитать токен из заголовка
-//   - проверить токен через пакет auth
-//   - поместить ID пользователя в контекст запроса
-//   - передать управление следующему handler или вернуть 401
+// Auth checks the user token and saves the user ID.
+// It blocks bad tokens.
 func Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("Authorization")
@@ -50,8 +43,7 @@ func Auth(next http.Handler) http.Handler {
 	})
 }
 
-// statusRecorder оборачивает http.ResponseWriter для перехвата статус-кода.
-// Используйте эту структуру в Logging.
+// statusRecorder saves the HTTP status code.
 type statusRecorder struct {
 	http.ResponseWriter
 	status      int
@@ -66,12 +58,7 @@ func (r *statusRecorder) WriteHeader(code int) {
 	}
 }
 
-// Logging логирует метод, путь, статус ответа и время выполнения каждого запроса.
-//
-// Что нужно сделать:
-//   - зафиксировать время начала запроса
-//   - обернуть w в statusRecorder для перехвата статус-кода
-//   - после выполнения handler записать лог
+// Logging prints info about every request.
 func Logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -89,12 +76,7 @@ func Logging(next http.Handler) http.Handler {
 	})
 }
 
-// Recover перехватывает панику внутри handler, логирует её и возвращает
-// клиенту ответ 500 Internal Server Error вместо того, чтобы уронить сервер.
-//
-// Что нужно сделать:
-//   - добавить defer с вызовом recover()
-//   - если паника произошла, залогировать её и отдать 500
+// Recover stops the server from crashing on panics.
 func Recover(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {

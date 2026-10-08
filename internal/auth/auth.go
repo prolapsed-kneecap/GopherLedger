@@ -1,10 +1,5 @@
-// Пакет auth отвечает за генерацию и проверку токенов аутентификации.
-// Токен - это случайная уникальная строка (например, UUID или hex-строка),
-// которая однозначно связана с конкретным пользователем.
-//
-// Внутри пакета нужно хранить соответствие токен -> userID.
-// Используйте для этого map с защитой от конкурентного доступа.
-// Реализуйте этот пакет самостоятельно.
+// Package auth makes and checks user tokens.
+// A token is a random string for each user.
 package auth
 
 import (
@@ -20,11 +15,10 @@ var (
 	userToToken = make(map[int64]string)
 )
 
-// ErrInvalidToken возвращается, если токен не найден или недействителен.
+// ErrInvalidToken means the token is bad.
 var ErrInvalidToken = errors.New("недействительный токен")
 
-// GenerateToken создаёт новый токен для пользователя с указанным ID
-// и сохраняет связь токен -> userID внутри пакета.
+// GenerateToken makes a new token for the user.
 func GenerateToken(userID int64) (string, error) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -46,8 +40,7 @@ func GenerateToken(userID int64) (string, error) {
 	return token, nil
 }
 
-// ValidateToken проверяет токен и возвращает ID пользователя.
-// Возвращает ErrInvalidToken если токен не найден.
+// ValidateToken checks if the token is good and returns the user ID.
 func ValidateToken(token string) (int64, error) {
 	mu.Lock()
 	defer mu.Unlock()

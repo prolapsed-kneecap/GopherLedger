@@ -1,13 +1,6 @@
-// Точка входа сервера. Реализуйте самостоятельно.
+// Package main starts the server.
 //
-// Порядок инициализации:
-//  1. Загрузить конфигурацию (пакет config)
-//  2. Создать хранилище (пакет store)
-//  3. Создать сервис (пакет service)
-//  4. Запустить воркер начислений в горутине (svc.StartAccrualWorker)
-//  5. Создать обработчик и роутер (пакеты handler, router)
-//  6. Запустить HTTP-сервер
-//  7. Реализовать graceful shutdown по сигналам SIGINT и SIGTERM
+// It connects everything together.
 package main
 
 import (

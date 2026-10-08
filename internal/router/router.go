@@ -1,5 +1,4 @@
-// Пакет router собирает маршруты и middleware в единый HTTP-обработчик.
-// Реализуйте этот пакет самостоятельно.
+// Package router connects all URLs to handlers.
 package router
 
 import (
@@ -9,14 +8,14 @@ import (
 	"gopherledger/internal/middleware"
 )
 
-// New создаёт и возвращает HTTP-обработчик со всеми маршрутами.
+// New makes the router with all paths.
 //
-// Публичные маршруты (без авторизации):
+// Public URLs:
 //
 //	POST /api/user/register
 //	POST /api/user/login
 //
-// Защищённые маршруты (требуют токен):
+// Private URLs:
 //
 //	POST /api/user/orders
 //	GET  /api/user/orders

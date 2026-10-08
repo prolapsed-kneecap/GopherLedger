@@ -1,7 +1,4 @@
-// Пакет service содержит бизнес-логику приложения.
-//
-// Взаимодействие с хранилищем осуществляется через интерфейс.
-// Определите этот интерфейс здесь, по месту использования.
+// Package service contains the main logic. It connects handlers to the store.
 package service
 
 import (
@@ -18,11 +15,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Service реализует бизнес-логику приложения.
-// Замените поле repo в структуре на свой интерфейс.
-//
-// processingOrders хранит номера заказов, которые сейчас обрабатываются воркером.
-// Защитите конкурентный доступ к этому полю самостоятельно.
+// Service holds the logic and the store.
+// processingOrders tracks active orders to avoid doing the same work twice.
 
 type Store interface {
 	CreateUser(login, passwordHash string) (*domain.User, error)
@@ -43,7 +37,7 @@ type Service struct {
 	processingOrders map[string]bool
 }
 
-// New создаёт Service.
+// New creates a Service.
 func New(repo Store) *Service {
 	return &Service{
 		repo:             repo,
@@ -52,11 +46,11 @@ func New(repo Store) *Service {
 }
 
 // ---------------------------------------------------------------------------
-// Методы бизнес-логики - реализуйте самостоятельно
+// Business logic
 // ---------------------------------------------------------------------------
 
-// RegisterUser регистрирует нового пользователя и возвращает токен аутентификации.
-// Хешируйте пароль перед сохранением с помощью crypto/sha256.
+// RegisterUser adds a new user and returns a token.
+// We hash the password before saving.
 func (s *Service) RegisterUser(login, password string) (string, error) {
 	hash := sha256.Sum256([]byte(password))
 	passwordHash := hex.EncodeToString(hash[:])
@@ -70,7 +64,7 @@ func (s *Service) RegisterUser(login, password string) (string, error) {
 	return auth.GenerateToken(user.ID)
 }
 
-// LoginUser проверяет учётные данные и возвращает токен аутентификации.
+// LoginUser checks the password and returns a token.
 func (s *Service) LoginUser(login, password string) (string, error) {
 	user, err := s.repo.GetUserByLogin(login)
 	if err != nil {
@@ -85,7 +79,7 @@ func (s *Service) LoginUser(login, password string) (string, error) {
 	return auth.GenerateToken(user.ID)
 }
 
-// CreateOrder проверяет номер заказа по алгоритму Луна и сохраняет заказ.
+// CreateOrder checks the order number and saves it.
 func (s *Service) CreateOrder(userID int64, number string) (*domain.Order, error) {
 	if !validateLuhn(number) {
 		return nil, domain.ErrInvalidOrder
@@ -93,17 +87,17 @@ func (s *Service) CreateOrder(userID int64, number string) (*domain.Order, error
 	return s.repo.CreateOrder(userID, number)
 }
 
-// GetUserOrders возвращает все заказы пользователя.
+// GetUserOrders gets all orders for a user.
 func (s *Service) GetUserOrders(userID int64) ([]domain.Order, error) {
 	return s.repo.GetUserOrders(userID)
 }
 
-// GetBalance возвращает текущий баланс пользователя.
+// GetBalance gets the user's current balance.
 func (s *Service) GetBalance(userID int64) (domain.Balance, error) {
 	return s.repo.GetBalance(userID)
 }
 
-// Withdraw проверяет номер заказа по алгоритму Луна и списывает сумму с баланса.
+// Withdraw checks the order number and takes points from the balance.
 func (s *Service) Withdraw(userID int64, orderNumber string, sum float64) error {
 	if !validateLuhn(orderNumber) {
 		return domain.ErrInvalidOrder
@@ -111,7 +105,7 @@ func (s *Service) Withdraw(userID int64, orderNumber string, sum float64) error 
 	return s.repo.Withdraw(userID, orderNumber, sum)
 }
 
-// GetWithdrawals возвращает историю списаний пользователя.
+// GetWithdrawals gets the user's past withdrawals.
 func (s *Service) GetWithdrawals(userID int64) ([]domain.Withdrawal, error) {
 	return s.repo.GetWithdrawals(userID)
 }
@@ -120,8 +114,8 @@ func (s *Service) GetStats() (domain.Stats, error) {
 	return s.repo.GetStats()
 }
 
-// validateLuhn проверяет контрольную сумму номера заказа по алгоритму Луна.
-// Вызывается при загрузке заказа и при списании баллов.
+// validateLuhn checks if an order number is valid.
+// We use this when saving orders and spending points.
 func validateLuhn(number string) bool {
 	if len(number) == 0 {
 		return false
@@ -148,18 +142,11 @@ func validateLuhn(number string) bool {
 }
 
 // ---------------------------------------------------------------------------
-// Воркер начислений
-//
-// StartAccrualWorker предоставлен. Реализуйте processAllPendingOrders
-// и processOrder самостоятельно.
-//
-// Это самая интересная часть проекта: конкурентная обработка заказов.
-// Подумайте, как защитить доступ к processingOrders из нескольких горутин.
+// Background worker
 // ---------------------------------------------------------------------------
 
-// StartAccrualWorker запускает фоновый цикл, который каждые 3 секунды
-// передаёт необработанные заказы в processAllPendingOrders.
-// Останавливается при отмене ctx.
+// StartAccrualWorker runs in the background to process orders.
+// It stops on context cancel.
 func (s *Service) StartAccrualWorker(ctx context.Context) {
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
@@ -174,10 +161,8 @@ func (s *Service) StartAccrualWorker(ctx context.Context) {
 	}
 }
 
-// processAllPendingOrders получает заказы для обработки и запускает горутины.
-// Реализуйте самостоятельно.
+// processAllPendingOrders gets new orders and starts working on them.
 func (s *Service) processAllPendingOrders(ctx context.Context) {
-	// TODO: замените interface{} на свой интерфейс и раскомментируйте
 
 	orders, err := s.repo.GetOrdersForProcessing()
 	if err != nil {
@@ -188,8 +173,7 @@ func (s *Service) processAllPendingOrders(ctx context.Context) {
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(5)
 
-	// TODO: итерируйтесь по заказам, пропускайте те что уже в обработке,
-	// для остальных запускайте s.processOrder через g.Go
+	// Skip active orders and start new ones.
 
 	for _, order := range orders {
 		orderNumber := order.Number
@@ -219,8 +203,7 @@ func (s *Service) processAllPendingOrders(ctx context.Context) {
 	}
 }
 
-// processOrder обрабатывает один заказ. Реализуйте самостоятельно.
-// Используйте вспомогательные функции ниже для генерации случайных значений.
+// processOrder updates the order status and adds points.
 func (s *Service) processOrder(ctx context.Context, number string) {
 	err := s.repo.UpdateOrderStatus(number, domain.OrderStatusProcessing, 0)
 	if err != nil {
@@ -256,20 +239,20 @@ func (s *Service) processOrder(ctx context.Context, number string) {
 }
 
 // ---------------------------------------------------------------------------
-// Вспомогательные функции - предоставлены
+// Helper functions - provided
 // ---------------------------------------------------------------------------
 
-// randomAccrual возвращает случайное начисление от 10 до 500 баллов.
+// randomAccrual gives a random amount of points.
 func randomAccrual() float64 {
 	return float64(rand.Intn(491) + 10)
 }
 
-// randomDelay возвращает случайную задержку от 2 до 6 секунд.
+// randomDelay gives a random wait time.
 func randomDelay() time.Duration {
 	return time.Duration(rand.Intn(5)+2) * time.Second
 }
 
-// isInvalid возвращает true примерно в 10% случаев.
+// isInvalid returns true 10% of the time.
 func isInvalid() bool {
 	return rand.Intn(10) == 0
 }

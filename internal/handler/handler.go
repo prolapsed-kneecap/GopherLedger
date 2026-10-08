@@ -1,8 +1,4 @@
-// Пакет handler содержит HTTP-обработчики.
-//
-// Взаимодействие с бизнес-логикой осуществляется через интерфейс.
-// Определите этот интерфейс здесь, по месту использования.
-// Реализуйте все обработчики самостоятельно.
+// Package handler has the HTTP routes.
 package handler
 
 import (
@@ -30,13 +26,12 @@ type Service interface {
 	GetStats() (domain.Stats, error)
 }
 
-// Handler хранит зависимость от бизнес-логики.
-// Замените interface{} на свой интерфейс.
+// Handler holds the service.
 type Handler struct {
 	svc Service
 }
 
-// New создаёт Handler.
+// New makes a Handler.
 func New(svc Service) *Handler {
 	return &Handler{svc: svc}
 }
@@ -75,23 +70,20 @@ type errorResponse struct {
 }
 
 // ---------------------------------------------------------------------------
-// Вспомогательные функции для ответов - предоставлены
+// Helpers for HTTP responses
 // ---------------------------------------------------------------------------
 
-// writeError записывает JSON-ответ с ошибкой.
-// Клиент видит только userMsg. Внутренние детали пишутся только в лог.
-// Прочитайте ТЗ и создайте структуру тела ответа самостоятельно.
+// writeError sends an error back to the user.
 func writeError(w http.ResponseWriter, status int, code, userMsg string, internalErr error) {
 	if internalErr != nil {
-		log.Printf("ошибка code=%s status=%d: %v", code, status, internalErr)
+		log.Printf("error code=%s status=%d: %v", code, status, internalErr)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	// TODO: создайте структуру ответа и сериализуйте её
 	json.NewEncoder(w).Encode(errorResponse{Code: code, Message: userMsg})
 }
 
-// writeJSON записывает успешный JSON-ответ.
+// writeJSON sends normal JSON data.
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -101,13 +93,10 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 // ---------------------------------------------------------------------------
-// Обработчики - реализуйте самостоятельно
+// Handlers
 // ---------------------------------------------------------------------------
 
-// Register обрабатывает POST /api/user/register.
-// При успехе: 200 OK, заголовок Authorization с токеном.
-// При дублировании логина: 409 Conflict.
-// При некорректных данных: 400 Bad Request.
+// Register creates a user and sends back a token.
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req authRequest
 	body, err := io.ReadAll(r.Body)
@@ -140,9 +129,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// Login обрабатывает POST /api/user/login.
-// При успехе: 200 OK, заголовок Authorization с токеном.
-// При неверных данных: 401 Unauthorized.
+// Login checks the user and sends back a token.
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req authRequest
 	body, err := io.ReadAll(r.Body)
@@ -173,12 +160,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// CreateOrder обрабатывает POST /api/user/orders.
-// Тело запроса: номер заказа в виде обычного текста.
-// 202 Accepted  - новый заказ принят в обработку.
-// 200 OK        - заказ уже загружен этим пользователем.
-// 409 Conflict  - заказ принадлежит другому пользователю.
-// 422 Unprocessable Entity - номер не прошёл проверку Луна.
+// CreateOrder saves a new order from the user.
 func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	userID, ok := UserIDFromContext(r.Context())
 	if !ok {
@@ -209,8 +191,7 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, order)
 }
 
-// GetOrders обрабатывает GET /api/user/orders.
-// 200 OK с JSON-массивом заказов или 204 No Content если заказов нет.
+// GetOrders sends back all user orders.
 func (h *Handler) GetOrders(w http.ResponseWriter, r *http.Request) {
 	userID, ok := UserIDFromContext(r.Context())
 	if !ok {
@@ -246,7 +227,7 @@ func (h *Handler) GetOrders(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// GetBalance обрабатывает GET /api/user/balance.
+// GetBalance sends back the user points.
 func (h *Handler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	userID, ok := UserIDFromContext(r.Context())
 	if !ok {
@@ -265,10 +246,7 @@ func (h *Handler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// Withdraw обрабатывает POST /api/user/balance/withdraw.
-// 200 OK при успехе.
-// 402 Payment Required при нехватке баллов.
-// 422 Unprocessable Entity при неверном номере заказа.
+// Withdraw spends the user points.
 func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	userID, ok := UserIDFromContext(r.Context())
 	if !ok {
@@ -304,8 +282,7 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// GetWithdrawals обрабатывает GET /api/user/withdrawals.
-// 200 OK с массивом или 204 No Content если списаний нет.
+// GetWithdrawals sends back the history of spent points.
 func (h *Handler) GetWithdrawals(w http.ResponseWriter, r *http.Request) {
 	userID, ok := UserIDFromContext(r.Context())
 	if !ok {
@@ -332,18 +309,7 @@ func (h *Handler) GetWithdrawals(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// ExportStats обрабатывает POST /api/stats/export.
-// Собирает статистику системы и записывает её в текстовый файл stats.txt
-// в корне проекта. Возвращает 200 OK при успехе.
-//
-// Файл должен содержать:
-//   - общее число зарегистрированных пользователей
-//   - общее число заказов и их распределение по статусам
-//   - суммарное количество начисленных баллов
-//   - суммарное количество списанных баллов
-//   - время генерации отчёта
-//
-// Для работы с файлами используйте пакет os (неделя 8).
+// ExportStats saves app data to stats.txt.
 func (h *Handler) ExportStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.svc.GetStats()
 	if err != nil {
@@ -371,15 +337,15 @@ func (h *Handler) ExportStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------------------------------------------------------------------
-// Вспомогательная функция для работы с контекстом - предоставлена
+// Context helper
 // ---------------------------------------------------------------------------
 
 type contextKey string
 
 const CtxKeyUserID contextKey = "userID"
 
-// UserIDFromContext извлекает ID аутентифицированного пользователя из контекста.
-// Возвращает 0, false если значение отсутствует.
+// UserIDFromContext gets the user ID from the request.
+// Returns false if there is no user ID.
 func UserIDFromContext(ctx context.Context) (int64, bool) {
 	userID, ok := ctx.Value(CtxKeyUserID).(int64)
 	return userID, ok

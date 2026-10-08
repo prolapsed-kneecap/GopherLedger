@@ -1,5 +1,4 @@
-// Пакет config загружает конфигурацию приложения из YAML-файла.
-// Реализуйте этот пакет самостоятельно.
+// Package config reads the settings from a file.
 package config
 
 import (
@@ -8,8 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config содержит параметры запуска сервера.
-// Изучите config.yaml и добавьте поля самостоятельно.
+// Config has the server settings.
 type Config struct {
 	ServerHost             string `yaml:"server_host"`
 	ServerPort             int    `yaml:"server_port"`
@@ -18,8 +16,8 @@ type Config struct {
 	WorkerConcurrency      int    `yaml:"worker_concurrency"`
 }
 
-// Load читает конфигурацию из файла config.yaml.
-// Если файл не найден или поле не задано, применяются значения по умолчанию.
+// Load reads config.yaml.
+// It uses default values if something is missing.
 func Load() (*Config, error) {
 	cfg := &Config{
 		ServerHost:             "localhost",
